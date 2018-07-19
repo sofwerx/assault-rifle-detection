@@ -6,6 +6,7 @@ cd $HOME/Documents/assault-rifle-detection
 
 docker build -t gpu_tf .
 
+xhost +local:docker
 
 nvidia-docker run --rm --network host --privileged -it -v ~/.Xauthority:/root/.Xauthority -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --env="QT_X11_NO_MITSHM=1" -v /dev/video0:/dev/video0  -v $HOME/Documents/assault-rifle-detection/tf_files:/tf_files  --device /dev/snd gpu_tf bash
 
