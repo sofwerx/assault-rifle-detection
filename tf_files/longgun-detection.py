@@ -16,6 +16,7 @@ import timeit
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import sys
 
 from collections import defaultdict
 from io import StringIO
@@ -28,9 +29,32 @@ from IPython.display import Image, display, clear_output
 #######################################################################
 ################ Initialize Functions/Variables #######################
 #######################################################################
+# Global Variables
+
+# Camera
+RECEPTION_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20043"
+RECEPTION_WEST = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
+DIRTYWERX_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20045"
+DIRTYWERX_SOUTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20046"
+THUNDERDRONE_INDOOR_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20047"
+THUNDERDRONE_INDOOR_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20048"
+OUTSIDE_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20049"
+OUTSIDE_NORTH_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20050"
+OUTSIDE_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20051"
+OUTSIDE_NORTH_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20052"
+DIRTYWERX_RAMP="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20053"
+
+
+# GPU Percentage
+gpuAmount = int((sys.argv)[2]) * 0.1
+
+
+# Camera Selection
+url = globals()[str((sys.argv)[1])]
+print url
+
 
 # Science Thresholds
-
 person_threshold = 0.50
 person_gun_threshold = 0.90
 
@@ -38,14 +62,38 @@ person_gun_threshold = 0.90
 # Intialize Tensorflow session and gpu memory management
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = gpuAmount
 session = tf.Session(config=config)
 
 os.chdir("/tensorflow/models/research/object_detection/")
 
 # Get Video and dimensions
 #cap = cv2.VideoCapture('draw9.mp4')
-url = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
+
+
+#
+RECEPTION_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20043"
+RECEPTION_WEST = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
+DIRTYWERX_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20045"
+DIRTYWERX_SOUTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20046"
+THUNDERDRONE_INDOOR_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20047"
+THUNDERDRONE_INDOOR_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20048"
+OUTSIDE_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20049"
+OUTSIDE_NORTH_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20050"
+OUTSIDE_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20051"
+OUTSIDE_NORTH_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20052"
+DIRTYWERX_RAMP="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20053"
+
+url = globals()[str((sys.argv)[1])]
+print url
+
+
+
+
+
+#url = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
 cap = cv2.VideoCapture(url)
+print cap
 
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -276,8 +324,10 @@ while(cap.isOpened()):
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         cv2.putText(image_np, gunScore, (int(px[person]), labelBuffer), font, 0.8, (0, 255, 0), 2)
 
+                        # Save Full Image and Save Object Image
+                        cv2.imwrite('/tf_files/save_image/'+ str((sys.argv)[1]) +"-frame%d.jpg" % person_count, image_np)
+                        cv2.imwrite('/tf_files/save_threat_image/' + str((sys.argv)[1]) + "-frame%d.jpg" % person_count, roi)
 
-                        cv2.imwrite('test_images/' + "frame%d.jpg" % person_count, image_np)
 
 
                     #cv2.putText(frame, gunScore, (10, 200), font, 0.8, (0, 255, 0), 2)
