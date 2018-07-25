@@ -1,7 +1,3 @@
-#######################################################################
-############################## Packages ###############################
-#######################################################################
-
 import numpy as np
 import os
 import six.moves.urllib as urllib
@@ -23,6 +19,10 @@ from io import StringIO
 from matplotlib import pyplot as plt
 from PIL import Image as img
 from IPython.display import Image, display, clear_output
+
+# Hold warnings
+import warnings
+warnings.filterwarnings('ignore')
 
 
 
@@ -56,7 +56,7 @@ print url
 
 # Science Thresholds
 person_threshold = 0.50
-person_gun_threshold = 0.90
+person_gun_threshold = 0.60
 
 
 # Intialize Tensorflow session and gpu memory management
@@ -71,21 +71,7 @@ os.chdir("/tensorflow/models/research/object_detection/")
 #cap = cv2.VideoCapture('draw9.mp4')
 
 
-#
-RECEPTION_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20043"
-RECEPTION_WEST = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
-DIRTYWERX_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20045"
-DIRTYWERX_SOUTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20046"
-THUNDERDRONE_INDOOR_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20047"
-THUNDERDRONE_INDOOR_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20048"
-OUTSIDE_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20049"
-OUTSIDE_NORTH_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20050"
-OUTSIDE_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20051"
-OUTSIDE_NORTH_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20052"
-DIRTYWERX_RAMP="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20053"
 
-url = globals()[str((sys.argv)[1])]
-print url
 
 
 
@@ -120,12 +106,15 @@ from utils import visualization_utils as vis_util
 
 
 # What model to download.
-MODEL_NAME = 'faster_rcnn_resnet101_coco_2017_11_08'
+# What model to download.
+MODEL_NAME ='faster_rcnn_resnet101_coco_2017_11_08'
+MODEL_FILE = MODEL_NAME + '.tar.gz'
+DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
 
 # Path to frozen detection graph. This is the actual model that is used for the object detection.
 PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
 
-# List of the strings that is used to add correct label for each box and select person class
+# List of the strings that is used to add correct label for each box.
 PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
 NUM_CLASSES = 1
 
@@ -186,6 +175,24 @@ count = 1
 person_count = 1
 
 
+
+####################Video Variables##########################
+
+
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) # float)
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = cap.get(cv2.CAP_PROP_FPS)
+print ("fps " + str(fps))
+
+
+
+# Define the codec and create VideoWriter object
+# fourcc = cv2.VideoWriter_fourcc(*'XVID')
+# out = cv2.VideoWriter('output.avi', fourcc, fps, (width, height))
+
+################################################################33
+
+
 # Loop Frame by Frame
 while(cap.isOpened()):
     # Capture frame-by-frame
@@ -230,6 +237,17 @@ while(cap.isOpened()):
                 (boxes, scores, classes, num_detections) = sess.run(
                     [boxes, scores, classes, num_detections],
                     feed_dict={image_tensor: image_np_expanded})
+                
+               # print scores, classes
+                
+                vis_util.visualize_boxes_and_labels_on_image_array(
+                    image_np,
+                    np.squeeze(boxes),
+                    np.squeeze(classes).astype(np.int32),
+                    np.squeeze(scores),
+                    category_index,
+                    use_normalized_coordinates=True,
+                    line_thickness=8)
 
 
                 # Convert tensorflow data to pandas data frams
@@ -237,7 +255,10 @@ while(cap.isOpened()):
                 df = pd.DataFrame(boxes.reshape(300, 4), columns=['y_min', 'x_min', 'y_max', 'x_max'])
                 df1 = pd.DataFrame(classes.reshape(300, 1), columns=['classes'])
                 df2 = pd.DataFrame(scores.reshape(300, 1), columns=['scores'])
-                df5 = pd.concat([df, df1, df2], axis=1)
+                df4 = pd.concat([df, df1, df2], axis=1)
+                df5 = df4[(df4.classes == 1) & (df4.scores > person_threshold)]
+                #df5 = df4.loc[(df4['classes'] == 1 ) &  (df4['scores'] > person_threshold)]
+                #print df5
 
                 # Transform box bound coordinates to pixel coordintate
 
@@ -256,7 +277,7 @@ while(cap.isOpened()):
                 df5['ob_mid_y'] = df5['ob_hgt_y'] / 2
                 df5['y_loc'] = df5["y_min_t"] + df5['ob_mid_y']
 
-                df6 = df5.loc[(df5['classes'] == 1 ) %  (df5['scores'] > person_threshold)]
+                df6 = df5
 
 
                 # Scan People in Frame
@@ -289,8 +310,15 @@ while(cap.isOpened()):
 
 
             start_time = timeit.default_timer()
+            
+            
+            ipx = []
+            ipy = []
+            iwid = []
+            ihei = []
+                   
 
-            for person in range(0,5):
+            for person in range(0,len(df6.index) - 1):
 
                 with tf.Session() as sess2:
 
@@ -313,11 +341,18 @@ while(cap.isOpened()):
 
                     score = predictions.item(1)
                     gunScore = str(score)
+                    
+#                     ipx = []
+#                     ipy = []
+#                     iwid = []
+#                     ihei = []
 
                     # Add Red Box to image under conditions
                     if score > person_gun_threshold:
                         person_count += 1
                         cv2.rectangle(image_np, (px[person],py[person]), (px[person]+wid[person], py[person]+ hei[person]), (0, 0, 255), 10)
+                        print(px[person],py[person],wid[person],hei[person])
+                        #ipx.append()
                         labelBuffer = int(py[person]) - int(hei[person] * 0.1)
 
                         # print
@@ -325,8 +360,8 @@ while(cap.isOpened()):
                         cv2.putText(image_np, gunScore, (int(px[person]), labelBuffer), font, 0.8, (0, 255, 0), 2)
 
                         # Save Full Image and Save Object Image
-                        cv2.imwrite('/tf_files/save_image/'+ str((sys.argv)[1]) +"-frame%d.jpg" % person_count, image_np)
-                        cv2.imwrite('/tf_files/save_threat_image/' + str((sys.argv)[1]) + "-frame%d.jpg" % person_count, roi)
+                        #cv2.imwrite('/tf_files/save_image/'+ str((sys.argv)[1]) +"-frame%d.jpg" % person_count, image_np)
+                        #cv2.imwrite('/tf_files/save_threat_image/' + str((sys.argv)[1]) + "-frame%d.jpg" % person_count, roi)
 
 
 
@@ -335,12 +370,19 @@ while(cap.isOpened()):
                     print 'Took {} seconds to perform image recognition on people found'.format(timeit.default_timer() - start_time)
 
         # Display the resulting frame
+            #cv2.rectangle(image_np, (px[person],py[person]), (px[person]+wid[person], py[person]+ hei[person]), (0, 0, 255), 10)
+            #cv2.rectangle(image_np, (px[person],py[person]), (px[person]+wid[person] - 100, py[person]+ hei[person] - 100), (0, 0, 255), 10)
+#             out.write(image_np)
             cv2.imshow('frame',cv2.resize(image_np, (1024, 768)))
         else:
               cap = cv2.VideoCapture(url)
               print("Error in frame capture")
 
+            
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
-
+        
+cap.release()
+out.release()
+cv2.destroyAllWindows()        
