@@ -1,3 +1,8 @@
+# coding: utf-8
+########################################################################################
+#### Ctrl-f '#!!!' to find lines that may need to be changed, depending on host.    ####
+#### As is, this script runs on the container built by the Dockerfile in this repo. ####
+########################################################################################
 import numpy as np
 import os
 import six.moves.urllib as urllib
@@ -19,6 +24,8 @@ from io import StringIO
 from matplotlib import pyplot as plt
 from PIL import Image as img
 from IPython.display import Image, display, clear_output
+from datetime import datetime
+from elasticsearch import Elasticsearch
 
 # Hold warnings
 import warnings
@@ -43,14 +50,26 @@ OUTSIDE_NORTH_WEST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20050"
 OUTSIDE_NORTH="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20051"
 OUTSIDE_NORTH_EAST="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20052"
 DIRTYWERX_RAMP="rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20053"
+TEST="west17.mp4" #!!!
 
+# Setup ES 
+try:
+    es = Elasticsearch(
+        [
+            'https://elastic:diatonouscoggedkittlepins@elasticsearch.orange.opswerx.org:443'
+        ],
+        verify_certs=True
+    )
+    print("ES - Connected.")
+except Exception as ex:
+    print("Error: ", ex)
 
 # GPU Percentage
-gpuAmount = int((sys.argv)[2]) * 0.1
+gpuAmount = int((sys.argv)[2]) * 0.1 #!!!
 
 
 # Camera Selection
-url = globals()[str((sys.argv)[1])]
+url = globals()[str((sys.argv)[1])] #!!!
 print url
 
 
@@ -62,24 +81,16 @@ person_gun_threshold = 0.60
 # Intialize Tensorflow session and gpu memory management
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-config.gpu_options.per_process_gpu_memory_fraction = gpuAmount
+config.gpu_options.per_process_gpu_memory_fraction = gpuAmount #!!!
 session = tf.Session(config=config)
 
-os.chdir("/tensorflow/models/research/object_detection/")
+os.chdir("/tensorflow/models/research/object_detection/") #!!!
 
-# Get Video and dimensions
-#cap = cv2.VideoCapture('draw9.mp4')
-
-
-
-
-
-
-
-
-#url = "rtsp://admin:1qazxsw2!QAZXSW@@datascience.opswerx.org:20044"
 cap = cv2.VideoCapture(url)
+open_msg = {'timestamp': datetime.now(), 'Text': 'Video stream started.'}
+es_post = es.index(index="reception-east", doc_type="_doc", body=open_msg)
 print cap
+print open_msg
 
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -134,7 +145,7 @@ categories = label_map_util.convert_label_map_to_categories(label_map, max_num_c
 category_index = label_map_util.create_category_index(categories)
 
 # Object Recognition model
-label_lines = [line.rstrip() for line in tf.gfile.GFile("/tf_files/retrained_labels.txt")]
+label_lines = [line.rstrip() for line in tf.gfile.GFile("/tf_files/retrained_labels.txt")] #!!!
 
 
 def initialSetup():
@@ -143,7 +154,7 @@ def initialSetup():
 
     # This takes 2-5 seconds to run
     # Unpersists graph from file
-    with tf.gfile.FastGFile('/tf_files/retrained_graph.pb', 'rb') as h:
+    with tf.gfile.FastGFile('/tf_files/retrained_graph.pb', 'rb') as h: #!!!
         graph_def = tf.GraphDef()
         graph_def.ParseFromString(h.read())
         tf.import_graph_def(graph_def, name='')
@@ -159,9 +170,6 @@ def load_image_into_numpy_array(image):
     (im_width, im_height) = image.size
     return np.array(image.getdata()).reshape(
         (im_height, im_width, 3)).astype(np.uint8)
-
-
-
 
 #######################################################################
 ############# Perform object Detection and Recognition ################
@@ -358,11 +366,45 @@ while(cap.isOpened()):
                         # print
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         cv2.putText(image_np, gunScore, (int(px[person]), labelBuffer), font, 0.8, (0, 255, 0), 2)
-
+                        
+                        # Package bounding box info for ES
+                        xmin = px[person] 
+                        xmax = (px[person] + wid[person])
+                        ymin = py[person] 
+                        ymax = (py[person] + hei[person])
+                        
+                        tdoc = {
+                            'timestamp': datetime.now(),
+                            'content': 'Video information',
+                            'text': 'Object detected.',
+                            'xmin': xmin,
+                            'xmax': xmax,
+                            'ymin': ymin,
+                            'ymax': ymax,
+                         }
+                        
                         # Save Full Image and Save Object Image
                         #cv2.imwrite('/tf_files/save_image/'+ str((sys.argv)[1]) +"-frame%d.jpg" % person_count, image_np)
                         #cv2.imwrite('/tf_files/save_threat_image/' + str((sys.argv)[1]) + "-frame%d.jpg" % person_count, roi)
-
+                        
+                        # Send results to ES
+                                       
+                        if url == RECEPTION_EAST:
+                            res = es.index(index="reception-east", doc_type="_doc", body=tdoc)
+                            print('ES document sent.')
+                            print(tdoc)
+                        elif url == RECEPTION_WEST:
+                            res = es.index(index="reception-west", doc_type="_doc", body=tdoc)
+                            print('ES document sent.')
+                            print(tdoc)
+                        elif url == OUTSIDE_WEST:
+                            res = es.index(index="outside-west", doc_type="_doc", body=tdoc)
+                            print('ES document sent.')
+                            print(tdoc)
+                        elif url == TEST:
+                            es_post = es.index(index="test", doc_type="_doc", body=tdoc)
+                            print('ES document sent.')
+                            print(tdoc)
 
 
                     #cv2.putText(frame, gunScore, (10, 200), font, 0.8, (0, 255, 0), 2)
@@ -372,7 +414,7 @@ while(cap.isOpened()):
         # Display the resulting frame
             #cv2.rectangle(image_np, (px[person],py[person]), (px[person]+wid[person], py[person]+ hei[person]), (0, 0, 255), 10)
             #cv2.rectangle(image_np, (px[person],py[person]), (px[person]+wid[person] - 100, py[person]+ hei[person] - 100), (0, 0, 255), 10)
-#             out.write(image_np)
+            #out.write(image_np)
             cv2.imshow('frame',cv2.resize(image_np, (1024, 768)))
         else:
               cap = cv2.VideoCapture(url)
@@ -384,5 +426,6 @@ while(cap.isOpened()):
         break
         
 cap.release()
-out.release()
+#out.release()
 cv2.destroyAllWindows()        
+
