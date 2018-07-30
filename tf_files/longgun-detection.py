@@ -376,7 +376,7 @@ while(cap.isOpened()):
                         tdoc = {
                             'timestamp': datetime.now(),
                             'content': 'Video information',
-                            'text': 'Object detected.',
+                            'text': 'Rifle detected.',
                             'xmin': xmin,
                             'xmax': xmax,
                             'ymin': ymin,
